@@ -108,6 +108,14 @@ config LOCALVERSION_AUTO
 	    $ git rev-parse --verify HEAD
 
 	  which is done within the script "scripts/setlocalversion".)
+	  
+config LOCALVERSION_SHA
+	bool "Add current sha of latest commit to the version string"
+	default y
+	depends on LOCALVERSION_AUTO
+	depends on !COMPILE_TEST
+	help
+	  A cleaner version of LOCALVERSION_AUTO, add the sha of latest commit.
 
 config HAVE_KERNEL_GZIP
 	bool
