@@ -35,6 +35,9 @@ struct schedtune {
 	/* Hint to bias scheduling of tasks on that SchedTune CGroup
 	 * towards idle CPUs */
 	int prefer_idle;
+    
+	/* Task will be scheduled on the CPU with the highest spare capacity */
+	int crucial;
 
 #ifdef CONFIG_UCLAMP_TASK_GROUP
 	/* Task utilization clamping */
@@ -83,6 +86,7 @@ static struct schedtune
 root_schedtune = {
 	.boost	= 0,
 	.prefer_idle = 0,
+	.crucial = 0,
 };
 
 /*
@@ -698,6 +702,23 @@ int schedtune_prefer_idle(struct task_struct *p)
 	return prefer_idle;
 }
 
+int schedtune_crucial(struct task_struct *p)
+{
+	struct schedtune *st;
+	int crucial;
+
+	if (unlikely(!schedtune_initialized))
+		return 0;
+
+	/* Get crucial value */
+	rcu_read_lock();
+	st = task_schedtune(p);
+	crucial = st->crucial;
+	rcu_read_unlock();
+
+	return crucial;
+}
+
 static u64
 prefer_idle_read(struct cgroup_subsys_state *css, struct cftype *cft)
 {
@@ -723,6 +744,24 @@ prefer_idle_write(struct cgroup_subsys_state *css, struct cftype *cft,
 		met_tag_oneshot(0, "sched_user_prefer_idle_top",
 				st->prefer_idle);
 #endif
+
+	return 0;
+}
+
+static u64
+crucial_read(struct cgroup_subsys_state *css, struct cftype *cft)
+{
+	struct schedtune *st = css_st(css);
+
+	return st->crucial;
+}
+
+static int
+crucial_write(struct cgroup_subsys_state *css, struct cftype *cft,
+	    u64 crucial)
+{
+	struct schedtune *st = css_st(css);
+	st->crucial = !!crucial;
 
 	return 0;
 }
@@ -771,6 +810,11 @@ static struct cftype files[] = {
 		.name = "prefer_idle",
 		.read_u64 = prefer_idle_read,
 		.write_u64 = prefer_idle_write,
+	},
+	{
+		.name = "crucial",
+		.read_u64 = crucial_read,
+		.write_u64 = crucial_write,
 	},
 #if defined(CONFIG_UCLAMP_TASK_GROUP)
 	{

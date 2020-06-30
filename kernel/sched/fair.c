@@ -7477,7 +7477,7 @@ static int start_cpu(struct task_struct *p, bool prefer_idle,
 }
 
 static inline int find_best_target(struct task_struct *p, int *backup_cpu,
-				   bool boosted, bool prefer_idle)
+				   bool boosted, bool prefer_idle, bool crucial)
 {
 	unsigned long best_idle_min_cap_orig = ULONG_MAX;
 	unsigned long min_util = uclamp_task_effective_util(p, UCLAMP_MIN);
@@ -7491,12 +7491,14 @@ static inline int find_best_target(struct task_struct *p, int *backup_cpu,
 	unsigned long min_cpu_util = ULONG_MAX;
 	unsigned long backup_min_cpu_util = ULONG_MAX;
 	unsigned long min_target_capacity = ULONG_MAX;
+	unsigned long crucial_max_cap = 0;
 	int best_idle_cstate = INT_MAX;
 	struct sched_domain *sd;
 	struct sched_group *sg;
 	int best_active_cpu = -1;
 	int best_idle_cpu = -1;
 	int target_cpu = -1;
+	int crucial_cpu = -1;
 	int cpu, i;
 	int min_cpu = -1;
 	int backup_min_cpu = -1;
@@ -7556,6 +7558,13 @@ static inline int find_best_target(struct task_struct *p, int *backup_cpu,
 			 */
 			wake_util = cpu_util_without(i, p);
 			new_util = wake_util + task_util_est(p);
+
+			/* Track the idle CPU with the largest capacity */
+			if (crucial && idle_cpu(i) &&
+					capacity_orig > crucial_max_cap) {
+				crucial_max_cap = capacity_orig;
+				crucial_cpu = i;
+			}
 
 			/*
 			 * Ensure minimum capacity to grant the required boost.
@@ -7809,6 +7818,10 @@ static inline int find_best_target(struct task_struct *p, int *backup_cpu,
 
 	} while (sg = sg->next, sg != sd->groups);
 
+	/* If a compatible crucial CPU was found, use it and skip the backup path */
+	if (crucial && (crucial_cpu != -1))
+		return crucial_cpu;
+    
 	/* Prefer Select CPU with higher cap_orig */
 	if (turning &&
 		target_capacity <= best_idle_min_cap_orig) {
@@ -8094,7 +8107,7 @@ static int find_energy_efficient_cpu(struct sched_domain *sd,
 		}
 	} else {
 		int boosted = (schedtune_task_boost(p) > 0);
-		int prefer_idle;
+		int prefer_idle, crucial;
 
 		/*
 		 * give compiler a hint that if sched_features
@@ -8104,11 +8117,14 @@ static int find_energy_efficient_cpu(struct sched_domain *sd,
 		prefer_idle = sched_feat(EAS_PREFER_IDLE) ?
 				(schedtune_prefer_idle(p) > 0) : 0;
 
+		crucial = sched_feat(EAS_CRUCIAL) ?
+				(schedtune_crucial(p) > 0) : 0;
+
 		eenv->max_cpu_count = EAS_CPU_BKP + 1;
 
 		/* Find a cpu with sufficient capacity */
 		target_cpu = find_best_target(p, &eenv->cpu[EAS_CPU_BKP].cpu_id,
-					      boosted, prefer_idle);
+					      boosted, prefer_idle, crucial);
 
 		/* Immediately return a found idle CPU for a prefer_idle task */
 		if (prefer_idle && target_cpu >= 0 && idle_cpu(target_cpu) &&
