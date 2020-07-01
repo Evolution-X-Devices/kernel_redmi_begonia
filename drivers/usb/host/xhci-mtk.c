@@ -897,8 +897,6 @@ static int xhci_mtk_remove(struct platform_device *dev)
 	xhci_mtk_sch_exit(mtk);
 	xhci_mtk_clks_disable(mtk);
 	xhci_mtk_ldos_disable(mtk);
-	pm_runtime_put_noidle(&dev->dev);
-	pm_runtime_disable(&dev->dev);
 
 	return 0;
 }
