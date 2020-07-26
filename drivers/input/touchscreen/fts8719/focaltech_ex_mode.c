@@ -285,7 +285,7 @@ int fts_ex_mode_init(struct fts_ts_data *ts_data)
 {
 	int ret = 0;
 
-	ts_data->glove_mode = DISABLE;
+	ts_data->glove_mode = ENABLE;
 	ts_data->cover_mode = DISABLE;
 	ts_data->charger_mode = DISABLE;
 
